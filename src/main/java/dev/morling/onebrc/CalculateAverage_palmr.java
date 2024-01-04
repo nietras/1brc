@@ -71,7 +71,7 @@ public class CalculateAverage_palmr {
 
             results[i].getAsUnorderedList().forEach(v -> {
                 String stationName = new String(v.stationNameBytes, StandardCharsets.UTF_8);
-                finalAggregator.compute(stationName, (_, x) -> {
+                finalAggregator.compute(stationName, (y, x) -> {
                     if (x == null) {
                         return v;
                     }
