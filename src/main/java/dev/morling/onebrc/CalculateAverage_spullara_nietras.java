@@ -18,6 +18,7 @@ package dev.morling.onebrc;
 import java.io.File;
 import java.io.IOException;
 import java.io.RandomAccessFile;
+import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -53,18 +54,47 @@ public class CalculateAverage_spullara_nietras {
                 var bb = fileChannel.map(FileChannel.MapMode.READ_ONLY, segment.start(), segmentEnd - segment.start());
                 // Up to 100 characters for a city name
                 var buffer = new byte[100];
+                // bytebuffer is probably slow
+                //var byteBuffer = ByteBuffer.allocate(128);
                 int startLine;
                 int limit = bb.limit();
                 while ((startLine = bb.position()) < limit) {
+                    //byteBuffer.rewind();
                     int currentPosition = startLine;
-                    var l0 = bb.getLong(currentPosition);
-                    byte b;
-                    int offset = 0;
                     int hash = 0;
-                    while (currentPosition != segmentEnd && (b = bb.get(currentPosition++)) != ';') {
-                        buffer[offset++] = b;
+                    int p = -1;
+                    for (;currentPosition < (segmentEnd - 4); currentPosition += 4) 
+                    {
+                        var i = bb.getInt(currentPosition);
+                        p = findSemiColon(i);
+                        if (p < 0)
+                        {
+                            //byteBuffer.putInt(i);
+                            // Dumb int hashing for now (do better)
+                            hash = 31 * hash + i;
+                        }
+                        else
+                        {
+                            break;
+                        }
+                    }
+                    var end = currentPosition + p;
+                    var length = end - startLine;
+                    for (;currentPosition < end; currentPosition++) 
+                    {
+                        var b = bb.get(currentPosition);
+                        //byteBuffer.put(b);
                         hash = 31 * hash + b;
                     }
+                    bb.get(startLine, buffer, 0, length);
+
+                    int offset = length;
+                    // byte b;
+                    // int offset = 0;
+                    // while (currentPosition != segmentEnd && (b = bb.get(currentPosition++)) != ';') {
+                    //     buffer[offset++] = b;
+                    //     hash = 31 * hash + b;
+                    // }
                     int temp;
                     int negative = 1;
                     // Inspired by @yemreinci to unroll this even further
@@ -87,7 +117,6 @@ public class CalculateAverage_spullara_nietras {
                     resultMap.putOrMerge(buffer, 0, offset, temp / 10.0, hash);
                     bb.position(currentPosition);
                 }
-                System.out.println(segment);
                 return resultMap;
             }
             catch (IOException e) {
@@ -96,9 +125,37 @@ public class CalculateAverage_spullara_nietras {
         }).parallel().flatMap(partition -> partition.getAll().stream())
                 .collect(Collectors.toMap(e -> new String(e.key()), Entry::value, CalculateAverage_spullara_nietras::merge, TreeMap::new));
 
-        System.out.println((System.currentTimeMillis() - start));
+        int minLength = Integer.MAX_VALUE;        
+        for (var s : resultsMap.keySet())
+        {
+            if (s.length() < minLength)
+            {
+                minLength = s.length();
+            }
+        }
         System.out.println(resultsMap);
+        System.out.println(minLength);
+        System.out.println((System.currentTimeMillis() - start));
     }
+
+    private static int findSemiColon(int word) {
+        int mask = broadcast((byte)';');
+        
+        int xor = word ^ mask;
+        int is_match = hasZeroByte(xor);
+        if (is_match != 0) {
+            return indexOfFirstSetByte(is_match);
+        }
+        return -1;
+    }
+
+    private static int  hasZeroByte(int v) {
+        return ((v - 0x01010101) & ~(v)&0x80808080);
+    };
+    private static int  indexOfFirstSetByte(int v) {
+        return ((((v - 1) & 0x01010101) * 0x01010101) >> (56 - 32)) - 1;
+    };
+    private static int broadcast(byte v)  { return 0x01010101 * v; }
 
     private static List<FileSegment> getFileSegments(File file) throws IOException {
         int numberOfSegments = Runtime.getRuntime().availableProcessors();
