@@ -48,3 +48,5 @@ out_expected.txt
 .vs
 bin/
 obj/
+publish/
+*.user

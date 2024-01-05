@@ -179,7 +179,7 @@ public class CalculateAverage_palmr {
         }
 
         public String toString() {
-            return STR."\{round(min)}/\{round(sum / count)}/\{round(max)}";
+            return "";// STR."\{round(min)}/\{round(sum / count)}/\{round(max)}";
         }
 
         private double round(final double value) {
